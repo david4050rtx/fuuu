@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Question Paper Scanner</title>
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js'></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .camera-section, .questions-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        #video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .capture-indicator {
+            background: rgba(76, 175, 80, 0.8);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            display: none;
+            animation: fadeInOut 1s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+
+        .capture-indicator.show {
+            display: block;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #4caf50;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #45a049;
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #da190b;
+        }
+
+        .btn-secondary {
+            background: #9e9e9e;
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .status-active {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status-processing {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .status-error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .questions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .questions-header h2 {
+            color: #333;
+            font-size: 1.5rem;
+        }
+
+        .question-count {
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .questions-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .question-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #fafafa;
+            transition: all 0.3s ease;
+        }
+
+        .question-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .question-number {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+
+        .question-status {
+            font-size: 0.85rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+
+        .status-captured {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-ocr-processing {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .status-ocr-complete {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .status-error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .question-thumbnail {
+            width: 100%;
+            max-height: 150px;
+            object-fit: contain;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            background: white;
+        }
+
+        .question-text {
+            color: #555;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            white-space: pre-wrap;
+        }
+
+        .question-text.processing {
+            font-style: italic;
+            color: #999;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+
+        .settings {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .settings h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .setting-item {
+            margin-bottom: 15px;
+        }
+
+        .setting-item label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .setting-item input[type="range"] {
+            width: 100%;
+        }
+
+        .setting-value {
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        canvas {
+            display: none;
+        }
+
+        .delete-btn {
+            background: none;
+            border: 1px solid #f44336;
+            color: #f44336;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            min-width: auto;
+            flex: none;
+        }
+
+        .delete-btn:hover {
+            background: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📸 Real-Time Question Paper Scanner</h1>
+            <p>Point your camera at questions - they'll be captured automatically!</p>
+        </div>
+
+        <div class="settings">
+            <h3>⚙️ Detection Settings</h3>
+            <div class="setting-item">
+                <label>
+                    Detection Sensitivity (higher = more sensitive)
+                    <span class="setting-value" id="thresholdValue">30</span>
+                </label>
+                <input type="range" id="threshold" min="10" max="50" value="30">
+            </div>
+            <div class="setting-item">
+                <label>
+                    Minimum Time Between Captures (seconds)
+                    <span class="setting-value" id="delayValue">2</span>
+                </label>
+                <input type="range" id="captureDelay" min="1" max="5" value="2" step="0.5">
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="camera-section">
+                <h2 style="margin-bottom: 15px; color: #333;">📹 Camera Feed</h2>
+                <div class="camera-container">
+                    <video id="video" autoplay playsinline></video>
+                    <div class="camera-overlay">
+                        <div class="capture-indicator" id="captureIndicator">
+                            ✓ Question Captured!
+                        </div>
+                    </div>
+                </div>
+                <canvas id="canvas"></canvas>
+                <canvas id="compareCanvas"></canvas>
+                
+                <div class="controls">
+                    <button id="startBtn" class="btn-primary">Start Camera</button>
+                    <button id="stopBtn" class="btn-danger" disabled>Stop Scanning</button>
+                    <button id="manualCapture" class="btn-secondary" disabled>Manual Capture</button>
+                </div>
+
+                <div id="status" class="status">
+                    Ready to start. Click "Start Camera" to begin.
+                </div>
+            </div>
+
+            <div class="questions-section">
+                <div class="questions-header">
+                    <h2>📝 Captured Questions</h2>
+                    <span class="question-count" id="questionCount">0</span>
+                </div>
+                
+                <div id="questionsList" class="questions-list">
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p>No questions captured yet</p>
+                    </div>
+                </div>
+
+                <div class="controls" style="margin-top: 20px;">
+                    <button id="testOCRBtn" class="btn-secondary">Test OCR</button>
+                    <button id="processAllBtn" class="btn-success" disabled>Process All (OCR)</button>
+                    <button id="exportBtn" class="btn-primary" disabled>Export Questions</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const config = {
+            detectionThreshold: 30,
+            captureDelay: 2000, // milliseconds
+            frameCheckInterval: 500, // milliseconds
+            videoWidth: 640,
+            videoHeight: 480
+        };
+
+        // State
+        const state = {
+            stream: null,
+            isScanning: false,
+            questions: [],
+            lastCaptureTime: 0,
+            lastFrameData: null,
+            detectionInterval: null,
+            tesseractWorker: null
+        };
+
+        // DOM Elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const compareCanvas = document.getElementById('compareCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const compareCtx = compareCanvas.getContext('2d', { willReadFrequently: true });
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const manualCapture = document.getElementById('manualCapture');
+        const status = document.getElementById('status');
+        const questionsList = document.getElementById('questionsList');
+        const questionCount = document.getElementById('questionCount');
+        const captureIndicator = document.getElementById('captureIndicator');
+        const processAllBtn = document.getElementById('processAllBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const testOCRBtn = document.getElementById('testOCRBtn');
+        const thresholdSlider = document.getElementById('threshold');
+        const delaySlider = document.getElementById('captureDelay');
+        const thresholdValue = document.getElementById('thresholdValue');
+        const delayValue = document.getElementById('delayValue');
+
+        // Initialize Tesseract Worker
+        async function initTesseract() {
+            if (!state.tesseractWorker) {
+                try {
+                    updateStatus('Initializing OCR engine (downloading language data ~2MB)...', 'processing');
+                    
+                    // Create worker with proper configuration
+                    const worker = await Tesseract.createWorker({
+                        logger: m => {
+                            console.log('Tesseract:', m);
+                            if (m.status === 'loading tesseract core') {
+                                updateStatus('Loading OCR core...', 'processing');
+                            } else if (m.status === 'initializing tesseract') {
+                                updateStatus('Initializing OCR...', 'processing');
+                            } else if (m.status === 'loading language traineddata') {
+                                updateStatus('Downloading language data...', 'processing');
+                            }
+                        }
+                    });
+                    
+                    // Load English language
+                    await worker.loadLanguage('eng');
+                    await worker.initialize('eng');
+                    
+                    // Set parameters for better accuracy
+                    await worker.setParameters({
+                        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,;:!?\'"()[]{}@#$%^&*-+=/<> ',
+                    });
+                    
+                    state.tesseractWorker = worker;
+                    console.log('Tesseract initialized successfully');
+                    updateStatus('✅ OCR engine ready!', 'active');
+                } catch (error) {
+                    console.error('Tesseract init error:', error);
+                    updateStatus('Error initializing OCR: ' + error.message + '. Check internet connection.', 'error');
+                    throw error;
+                }
+            }
+            return state.tesseractWorker;
+        }
+
+        // Settings handlers
+        thresholdSlider.addEventListener('input', (e) => {
+            config.detectionThreshold = parseInt(e.target.value);
+            thresholdValue.textContent = e.target.value;
+        });
+
+        delaySlider.addEventListener('input', (e) => {
+            config.captureDelay = parseFloat(e.target.value) * 1000;
+            delayValue.textContent = e.target.value;
+        });
+
+        // Start camera
+        async function startCamera() {
+            try {
+                updateStatus('Starting camera...', 'processing');
+                
+                state.stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: config.videoWidth },
+                        height: { ideal: config.videoHeight }
+                    }
+                });
+
+                video.srcObject = state.stream;
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        compareCanvas.width = video.videoWidth;
+                        compareCanvas.height = video.videoHeight;
+                        resolve();
+                    };
+                });
+
+                state.isScanning = true;
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                manualCapture.disabled = false;
+
+                // Start detection loop
+                state.detectionInterval = setInterval(detectSceneChange, config.frameCheckInterval);
+
+                updateStatus('Camera active - Point at questions to auto-capture', 'active');
+                
+                // Initialize Tesseract in background
+                initTesseract();
+
+            } catch (error) {
+                console.error('Camera error:', error);
+                updateStatus('Error: Could not access camera. Please check permissions.', 'error');
+            }
+        }
+
+        // Stop camera
+        function stopCamera() {
+            state.isScanning = false;
+            
+            if (state.detectionInterval) {
+                clearInterval(state.detectionInterval);
+            }
+
+            if (state.stream) {
+                state.stream.getTracks().forEach(track => track.stop());
+                state.stream = null;
+            }
+
+            video.srcObject = null;
+            state.lastFrameData = null;
+
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            manualCapture.disabled = true;
+
+            updateStatus('Camera stopped', 'default');
+        }
+
+        // Detect scene change
+        function detectSceneChange() {
+            if (!state.isScanning) return;
+
+            // Check if enough time has passed since last capture
+            const now = Date.now();
+            if (now - state.lastCaptureTime < config.captureDelay) {
+                return;
+            }
+
+            // Capture current frame
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            // If no previous frame, store this one
+            if (!state.lastFrameData) {
+                state.lastFrameData = currentImageData;
+                return;
+            }
+
+            // Calculate difference
+            const difference = calculateFrameDifference(state.lastFrameData, currentImageData);
+
+            // If significant change detected, capture
+            if (difference > config.detectionThreshold) {
+                captureQuestion(canvas.toDataURL('image/jpeg', 0.9));
+                state.lastFrameData = currentImageData;
+                state.lastCaptureTime = now;
+            }
+        }
+
+        // Calculate frame difference
+        function calculateFrameDifference(imageData1, imageData2) {
+            const data1 = imageData1.data;
+            const data2 = imageData2.data;
+            let totalDiff = 0;
+            const pixelCount = data1.length / 4;
+
+            // Sample every 4th pixel for performance
+            for (let i = 0; i < data1.length; i += 16) {
+                const diff = Math.abs(data1[i] - data2[i]) +
+                            Math.abs(data1[i + 1] - data2[i + 1]) +
+                            Math.abs(data1[i + 2] - data2[i + 2]);
+                totalDiff += diff;
+            }
+
+            return (totalDiff / (pixelCount / 4)) / 3; // Normalize
+        }
+
+        // Capture question
+        function captureQuestion(imageData) {
+            const question = {
+                id: state.questions.length + 1,
+                image: imageData,
+                text: null,
+                status: 'captured',
+                timestamp: new Date().toLocaleTimeString()
+            };
+
+            state.questions.push(question);
+            updateQuestionsList();
+            showCaptureIndicator();
+            updateStatus(`Captured Question ${question.id}`, 'active');
+
+            // Enable processing buttons
+            processAllBtn.disabled = false;
+            exportBtn.disabled = false;
+        }
+
+        // Manual capture
+        manualCapture.addEventListener('click', () => {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            captureQuestion(canvas.toDataURL('image/jpeg', 0.9));
+            state.lastCaptureTime = Date.now();
+        });
+
+        // Show capture indicator
+        function showCaptureIndicator() {
+            captureIndicator.classList.add('show');
+            setTimeout(() => {
+                captureIndicator.classList.remove('show');
+            }, 1000);
+        }
+
+        // Update questions list
+        function updateQuestionsList() {
+            questionCount.textContent = state.questions.length;
+
+            if (state.questions.length === 0) {
+                questionsList.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p>No questions captured yet</p>
+                    </div>
+                `;
+                return;
+            }
+
+            questionsList.innerHTML = state.questions.map(q => `
+                <div class="question-item">
+                    <div class="question-header">
+                        <span class="question-number">Question ${q.id}</span>
+                        <div>
+                            <span class="question-status status-${q.status.replace(' ', '-')}">
+                                ${q.status === 'captured' ? '📸 Captured' : 
+                                  q.status === 'processing' ? '⏳ Processing...' : 
+                                  q.status === 'error' ? '❌ Error' :
+                                  '✅ Complete'}
+                            </span>
+                            ${!q.text || q.status === 'error' ? 
+                                `<button class="delete-btn" style="background: #2196F3; color: white; border-color: #2196F3;" onclick="processSingleQuestion(${q.id})">Process This</button>` : 
+                                ''}
+                            <button class="delete-btn" onclick="deleteQuestion(${q.id})">Delete</button>
+                        </div>
+                    </div>
+                    <img src="${q.image}" alt="Question ${q.id}" class="question-thumbnail">
+                    <div class="question-text ${q.text ? '' : 'processing'}">
+                        ${q.text || 'Click "Process This" or "Process All" to extract text'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Delete question
+        window.deleteQuestion = function(id) {
+            state.questions = state.questions.filter(q => q.id !== id);
+            // Renumber remaining questions
+            state.questions.forEach((q, index) => {
+                q.id = index + 1;
+            });
+            updateQuestionsList();
+            
+            if (state.questions.length === 0) {
+                processAllBtn.disabled = true;
+                exportBtn.disabled = true;
+            }
+        };
+
+        // Process single question
+        window.processSingleQuestion = async function(id) {
+            const question = state.questions.find(q => q.id === id);
+            if (!question) return;
+
+            try {
+                const worker = await initTesseract();
+                
+                if (!worker) {
+                    throw new Error('Failed to initialize OCR worker');
+                }
+                
+                question.status = 'processing';
+                updateQuestionsList();
+                updateStatus(`Processing question ${id}...`, 'processing');
+
+                // Convert base64 to proper image format
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error('Image load timeout')), 10000);
+                    img.onload = () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    };
+                    img.onerror = (e) => {
+                        clearTimeout(timeout);
+                        reject(e);
+                    };
+                    img.src = question.image;
+                });
+
+                // Create a clean canvas with the image
+                const preprocessCanvas = document.createElement('canvas');
+                preprocessCanvas.width = img.width;
+                preprocessCanvas.height = img.height;
+                const preprocessCtx = preprocessCanvas.getContext('2d', { willReadFrequently: false });
+                
+                // White background
+                preprocessCtx.fillStyle = 'white';
+                preprocessCtx.fillRect(0, 0, preprocessCanvas.width, preprocessCanvas.height);
+                preprocessCtx.drawImage(img, 0, 0);
+                
+                // Optional: Enhance contrast
+                const imageData = preprocessCtx.getImageData(0, 0, preprocessCanvas.width, preprocessCanvas.height);
+                enhanceContrast(imageData);
+                preprocessCtx.putImageData(imageData, 0, 0);
+                
+                // Perform OCR
+                const result = await worker.recognize(preprocessCanvas);
+                const text = result.data.text.trim();
+                
+                question.text = text || 'No text detected in image';
+                question.status = 'complete';
+                
+                updateQuestionsList();
+                updateStatus(`Question ${id} processed successfully!`, 'active');
+            } catch (error) {
+                console.error(`Error processing question ${id}:`, error);
+                question.text = `Error: ${error.message}. Check console for details or try Test OCR button.`;
+                question.status = 'error';
+                updateQuestionsList();
+                updateStatus(`Error processing question ${id}`, 'error');
+            }
+        };
+
+        // Test OCR functionality
+        testOCRBtn.addEventListener('click', async () => {
+            testOCRBtn.disabled = true;
+            testOCRBtn.textContent = 'Testing...';
+            
+            try {
+                updateStatus('Testing OCR engine...', 'processing');
+                const worker = await initTesseract();
+                
+                if (!worker) {
+                    throw new Error('Failed to initialize OCR worker');
+                }
+                
+                // Create a simple test image with text
+                const testCanvas = document.createElement('canvas');
+                testCanvas.width = 400;
+                testCanvas.height = 100;
+                const testCtx = testCanvas.getContext('2d');
+                
+                // White background
+                testCtx.fillStyle = 'white';
+                testCtx.fillRect(0, 0, 400, 100);
+                
+                // Black text
+                testCtx.fillStyle = 'black';
+                testCtx.font = 'bold 30px Arial';
+                testCtx.fillText('Hello World Test', 50, 60);
+                
+                console.log('Testing OCR with sample image...');
+                
+                // Test OCR on this image
+                const result = await worker.recognize(testCanvas);
+                const text = result.data.text.trim();
+                
+                console.log('Test OCR result:', text);
+                console.log('Full result object:', result);
+                
+                if (text.toLowerCase().includes('hello') || text.toLowerCase().includes('world')) {
+                    updateStatus('✅ OCR is working! You can now capture and process questions.', 'active');
+                    alert('OCR Test Passed! ✅\n\nDetected text: ' + text + '\n\nYou can now use the scanner.');
+                } else {
+                    updateStatus('⚠️ OCR test completed but result unclear: ' + text, 'processing');
+                    alert('OCR Test Uncertain ⚠️\n\nDetected: ' + text + '\n\nTry processing a real question to see if it works.');
+                }
+            } catch (error) {
+                console.error('Test OCR error:', error);
+                console.error('Error stack:', error.stack);
+                updateStatus('❌ OCR test failed: ' + error.message, 'error');
+                alert('OCR Test Failed ❌\n\nError: ' + error.message + '\n\nMake sure you have internet connection (Tesseract needs to download ~2MB). Try refreshing the page.');
+            } finally {
+                testOCRBtn.textContent = 'Test OCR';
+                testOCRBtn.disabled = false;
+            }
+        });
+
+        // Process all questions with OCR
+        processAllBtn.addEventListener('click', async () => {
+            processAllBtn.disabled = true;
+            processAllBtn.textContent = 'Processing...';
+            updateStatus('Running OCR on all questions...', 'processing');
+
+            try {
+                // Initialize worker first
+                const worker = await initTesseract();
+                
+                if (!worker) {
+                    throw new Error('Failed to initialize OCR worker');
+                }
+
+                for (let i = 0; i < state.questions.length; i++) {
+                    const question = state.questions[i];
+                    if (question.text) continue; // Skip already processed
+
+                    question.status = 'processing';
+                    updateQuestionsList();
+
+                    try {
+                        updateStatus(`Processing question ${i + 1}/${state.questions.length}...`, 'processing');
+                        
+                        // Convert base64 to proper image format
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous';
+                        
+                        // Wait for image to load
+                        await new Promise((resolve, reject) => {
+                            const timeout = setTimeout(() => reject(new Error('Image load timeout')), 10000);
+                            img.onload = () => {
+                                clearTimeout(timeout);
+                                console.log(`Image ${i + 1} loaded:`, img.width, 'x', img.height);
+                                resolve();
+                            };
+                            img.onerror = (e) => {
+                                clearTimeout(timeout);
+                                console.error(`Image ${i + 1} load error:`, e);
+                                reject(new Error('Failed to load image'));
+                            };
+                            img.src = question.image;
+                        });
+
+                        // Create a clean canvas with the image
+                        const preprocessCanvas = document.createElement('canvas');
+                        preprocessCanvas.width = img.width;
+                        preprocessCanvas.height = img.height;
+                        const preprocessCtx = preprocessCanvas.getContext('2d', { willReadFrequently: false });
+                        
+                        // Draw image on canvas
+                        preprocessCtx.fillStyle = 'white';
+                        preprocessCtx.fillRect(0, 0, preprocessCanvas.width, preprocessCanvas.height);
+                        preprocessCtx.drawImage(img, 0, 0);
+                        
+                        // Optional: Enhance contrast for better OCR
+                        const imageData = preprocessCtx.getImageData(0, 0, preprocessCanvas.width, preprocessCanvas.height);
+                        enhanceContrast(imageData);
+                        preprocessCtx.putImageData(imageData, 0, 0);
+                        
+                        console.log(`Starting OCR for question ${i + 1}...`);
+                        
+                        // Perform OCR on the canvas - use recognize method properly
+                        const result = await worker.recognize(preprocessCanvas);
+                        
+                        console.log('OCR result object:', result);
+                        
+                        const text = result.data.text.trim();
+                        
+                        console.log(`Question ${i + 1} OCR result:`, text.substring(0, 100));
+                        
+                        question.text = text || 'No text detected in image';
+                        question.status = 'complete';
+                        
+                    } catch (error) {
+                        console.error(`OCR error for question ${i + 1}:`, error);
+                        question.text = `Error: ${error.message || 'Could not process image'}. Try recapturing this question with better lighting.`;
+                        question.status = 'error';
+                    }
+
+                    updateQuestionsList();
+                }
+
+                processAllBtn.textContent = 'Process All (OCR)';
+                updateStatus('All questions processed!', 'active');
+            } catch (error) {
+                console.error('Processing error:', error);
+                updateStatus('Error during processing: ' + error.message, 'error');
+                processAllBtn.textContent = 'Retry Processing';
+            } finally {
+                processAllBtn.disabled = false;
+            }
+        });
+
+        // Enhance image contrast for better OCR
+        function enhanceContrast(imageData) {
+            const data = imageData.data;
+            const factor = 1.5; // Contrast factor
+            
+            for (let i = 0; i < data.length; i += 4) {
+                // Apply contrast enhancement to RGB channels
+                data[i] = clamp(((data[i] - 128) * factor) + 128);     // Red
+                data[i + 1] = clamp(((data[i + 1] - 128) * factor) + 128); // Green
+                data[i + 2] = clamp(((data[i + 2] - 128) * factor) + 128); // Blue
+            }
+        }
+
+        function clamp(value) {
+            return Math.max(0, Math.min(255, value));
+        }
+
+        // Export questions
+        exportBtn.addEventListener('click', () => {
+            const exportData = {
+                title: 'Question Paper',
+                date: new Date().toLocaleString(),
+                totalQuestions: state.questions.length,
+                questions: state.questions.map(q => ({
+                    id: q.id,
+                    text: q.text || 'Not processed',
+                    timestamp: q.timestamp
+                }))
+            };
+
+            // Create formatted text output
+            let textOutput = `QUESTION PAPER\n`;
+            textOutput += `Generated: ${exportData.date}\n`;
+            textOutput += `Total Questions: ${exportData.totalQuestions}\n`;
+            textOutput += `${'='.repeat(50)}\n\n`;
+
+            exportData.questions.forEach(q => {
+                textOutput += `QUESTION ${q.id}\n`;
+                textOutput += `${'-'.repeat(50)}\n`;
+                textOutput += `${q.text}\n\n`;
+            });
+
+            // Download JSON
+            const jsonBlob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const jsonUrl = URL.createObjectURL(jsonBlob);
+            const jsonLink = document.createElement('a');
+            jsonLink.href = jsonUrl;
+            jsonLink.download = `question-paper-${Date.now()}.json`;
+            jsonLink.click();
+
+            // Download text file
+            const textBlob = new Blob([textOutput], { type: 'text/plain' });
+            const textUrl = URL.createObjectURL(textBlob);
+            const textLink = document.createElement('a');
+            textLink.href = textUrl;
+            textLink.download = `question-paper-${Date.now()}.txt`;
+            textLink.click();
+
+            updateStatus('Questions exported successfully!', 'active');
+        });
+
+        // Update status message
+        function updateStatus(message, type = 'default') {
+            status.textContent = message;
+            status.className = 'status';
+            if (type === 'active') status.classList.add('status-active');
+            if (type === 'processing') status.classList.add('status-processing');
+            if (type === 'error') status.classList.add('status-error');
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startCamera);
+        stopBtn.addEventListener('click', stopCamera);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (state.tesseractWorker) {
+                state.tesseractWorker.terminate();
+            }
+            stopCamera();
+        });
+    </script>
+</body>
+</html>
